@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreadPoolLib — Live Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface2: #f1efe8;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --text: #1a1a18;
+    --text2: #5f5e5a;
+    --text3: #9a9890;
+    --purple: #534ab7;
+    --purple-bg: #eeedfe;
+    --teal: #1d9e75;
+    --teal-bg: #e1f5ee;
+    --amber: #ba7517;
+    --amber-bg: #faeeda;
+    --red: #a32d2d;
+    --red-bg: #fcebeb;
+    --blue: #185fa5;
+    --blue-bg: #e6f1fb;
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --surface: #242422;
+      --surface2: #2c2c2a;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.14);
+      --text: #e8e6de;
+      --text2: #9a9890;
+      --text3: #5f5e5a;
+      --purple-bg: #26215c;
+      --teal-bg: #04342c;
+      --amber-bg: #412402;
+      --red-bg: #501313;
+      --blue-bg: #042c53;
+    }
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  header h1 { font-size: 16px; font-weight: 600; }
+  header .sub { font-size: 13px; color: var(--text2); }
+  .badge {
+    font-size: 11px; font-weight: 500; padding: 2px 10px;
+    border-radius: 20px; background: var(--teal-bg); color: var(--teal);
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    height: calc(100vh - 57px);
+  }
+
+  .sidebar {
+    background: var(--surface);
+    border-right: 0.5px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .main { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+
+  .card-title {
+    font-size: 12px; font-weight: 600; color: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+  }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric {
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+  .metric .val { font-size: 24px; font-weight: 600; line-height: 1.1; }
+  .metric .key { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .metric.m-active .val { color: var(--teal); }
+  .metric.m-queue .val { color: var(--purple); }
+  .metric.m-done .val { color: var(--blue); }
+
+  .worker-list { display: flex; flex-direction: column; gap: 6px; }
+  .worker-item {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 8px 10px; font-size: 13px;
+    transition: background 0.2s;
+  }
+  .worker-item.busy { background: var(--teal-bg); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background 0.25s; }
+  .dot.idle { background: var(--border2); }
+  .dot.busy { background: var(--teal); }
+  .worker-name { color: var(--text2); font-size: 12px; min-width: 64px; }
+  .worker-task { color: var(--text); font-weight: 500; font-size: 12px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .queue-chips { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; align-items: center; }
+  .chip {
+    font-size: 11px; font-weight: 500; padding: 3px 10px;
+    border-radius: 20px; border: 0.5px solid var(--border2);
+    color: var(--text2); background: var(--surface2);
+    transition: all 0.2s;
+  }
+  .chip.HIGH { background: var(--teal-bg); color: var(--teal); border-color: var(--teal); }
+  .chip.NORMAL { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
+
+  .progress-track { height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+  .progress-fill { height: 100%; background: var(--teal); border-radius: 2px; transition: width 0.4s; }
+
+  .form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+  .form-row label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; }
+  select, input[type=range] {
+    width: 100%; padding: 7px 10px; border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border2); background: var(--surface2);
+    color: var(--text); font-size: 13px; font-family: var(--sans);
+    cursor: pointer; appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 28px;
+  }
+  input[type=range] { padding: 4px 0; background-image: none; accent-color: var(--purple); }
+  .btn {
+    width: 100%; padding: 9px; border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border2); background: var(--surface2);
+    color: var(--text); font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; font-family: var(--sans);
+  }
+  .btn:hover { background: var(--purple-bg); border-color: var(--purple); color: var(--purple); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: var(--purple); border-color: var(--purple); color: #fff; }
+  .btn.primary:hover { opacity: 0.9; }
+  .btn.danger:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+  .btn-row { display: flex; gap: 6px; }
+  .btn-row .btn { width: auto; flex: 1; }
+
+  .log-box {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.65;
+    max-height: 200px; overflow-y: auto;
+    background: var(--surface2); border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+  .log-line { display: flex; gap: 8px; }
+  .log-ts { color: var(--text3); flex-shrink: 0; }
+  .log-msg { color: var(--text2); }
+  .log-msg.ok { color: var(--teal); }
+  .log-msg.warn { color: var(--amber); }
+  .log-msg.info { color: var(--purple); }
+
+  .explainer { display: flex; flex-direction: column; gap: 10px; }
+  .exp-item { display: flex; gap: 10px; align-items: flex-start; }
+  .exp-num {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+    background: var(--purple-bg); color: var(--purple);
+  }
+  .exp-text { font-size: 12px; color: var(--text2); line-height: 1.5; padding-top: 2px; }
+  .exp-text strong { color: var(--text); font-weight: 600; font-family: var(--mono); }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-item { font-size: 12px; }
+  .stat-item .s-key { color: var(--text2); }
+  .stat-item .s-val { font-weight: 600; font-family: var(--mono); }
+
+  .empty-hint { font-size: 12px; color: var(--text3); font-style: italic; }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .sidebar { border-right: none; border-bottom: 0.5px solid var(--border); }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>ThreadPoolLib</h1>
+    <div class="sub">Asynchronous Task Queue — C++17 · pthreads · macOS / Linux</div>
+  </div>
+  <span class="badge" id="status-badge">Ready</span>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar: controls + how it works -->
+  <aside class="sidebar">
+
+    <div>
+      <div class="card-title">Submit tasks</div>
+      <div class="form-row">
+        <label>Task type</label>
+        <select id="task-type">
+          <option value="matrix">Matrix multiply (image processing)</option>
+          <option value="blur">Gaussian blur (640×480 frame)</option>
+          <option value="sort">Merge sort (1M elements)</option>
+          <option value="hash">Hash computation</option>
+          <option value="fib">Fibonacci (heavy CPU)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Priority</label>
+        <select id="task-priority">
+          <option value="HIGH">High — served first</option>
+          <option value="NORMAL" selected>Normal</option>
+          <option value="LOW">Low — served last</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Count — <span id="count-label">5</span> tasks</label>
+        <input type="range" id="task-count" min="1" max="20" value="5" step="1"
+          oninput="document.getElementById('count-label').textContent=this.value">
+      </div>
+      <div class="form-row">
+        <label>Workers — <span id="worker-label">4</span> threads</label>
+        <input type="range" id="worker-count" min="1" max="8" value="4" step="1"
+          oninput="document.getElementById('worker-label').textContent=this.value;resizePool()">
+      </div>
+      <button class="btn primary" onclick="submitTasks()" style="margin-bottom:6px">Submit tasks</button>
+      <div class="btn-row">
+        <button class="btn danger" onclick="shutdownNow()">Shutdown now</button>
+        <button class="btn" onclick="resetPool()">Reset pool</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card-title">How it works</div>
+      <div class="explainer">
+        <div class="exp-item">
+          <div class="exp-num">1</div>
+          <div class="exp-text"><strong>submit()</strong> wraps your function in a <strong>packaged_task</strong>, pushes to priority queue (mutex held), returns a <strong>future</strong> instantly.</div>
+        </div>
+        <div class="exp-item">
+          <div class="exp-num">2</div>
+          <div class="exp-text">Workers sleep on <strong>queue_cv_</strong>. <strong>notify_one()</strong> wakes exactly one — no thundering herd.</div>
+        </div>
+        <div class="exp-item">
+          <div class="exp-num">3</div>
+          <div class="exp-text">Worker pops highest-priority task, releases <strong>mutex</strong>, then executes — lock-free parallelism.</div>
+        </div>
+        <div class="exp-item">
+          <div class="exp-num">4</div>
+          <div class="exp-text"><strong>future.get()</strong> blocks only at that moment. Exceptions inside tasks re-throw on <strong>.get()</strong>.</div>
+        </div>
+        <div class="exp-item">
+          <div class="exp-num">5</div>
+          <div class="exp-text"><strong>wait_all()</strong> sleeps on <strong>idle_cv_</strong> until <strong>active_count_</strong> hits zero and queue is empty.</div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Main: pool state -->
+  <main class="main">
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="val" id="m-workers">4</div>
+        <div class="key">total workers</div>
+      </div>
+      <div class="metric m-active">
+        <div class="val" id="m-active">0</div>
+        <div class="key">active now</div>
+      </div>
+      <div class="metric m-queue">
+        <div class="val" id="m-queue">0</div>
+        <div class="key">queued</div>
+      </div>
+      <div class="metric m-done">
+        <div class="val" id="m-done">0</div>
+        <div class="key">completed</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Worker threads</div>
+      <div class="worker-list" id="workers-ui"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Task queue (priority order)</div>
+      <div class="queue-chips" id="queue-ui">
+        <span class="empty-hint">Empty — submit tasks using the panel</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Pool statistics</div>
+      <div class="stat-grid">
+        <div class="stat-item"><div class="s-key">Total submitted</div><div class="s-val" id="s-submitted">0</div></div>
+        <div class="stat-item"><div class="s-key">Completed</div><div class="s-val" id="s-completed">0</div></div>
+        <div class="stat-item"><div class="s-key">Failed / exceptions</div><div class="s-val" id="s-failed">0</div></div>
+        <div class="stat-item"><div class="s-key">Avg wait (simulated)</div><div class="s-val" id="s-wait">0 ms</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        Execution log
+        <button class="btn" style="margin-left:auto;width:auto;padding:2px 8px;font-size:11px" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="log-box" id="log"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const DURATIONS = { matrix:[200,700], blur:[300,900], sort:[80,350], hash:[100,450], fib:[500,1400] };
+const LABELS    = { matrix:'MatMul', blur:'Blur', sort:'Sort', hash:'Hash', fib:'Fib' };
+
+let pool = { workers:[], queue:[], done:0, submitted:0, failed:0, taskId:0, shutdown:false, waitMs:0 };
+
+function rand(a,b){ return Math.floor(Math.random()*(b-a))+a; }
+
+function ts(){
+  const n=new Date();
+  return `${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}.${String(n.getMilliseconds()).padStart(3,'0')}`;
+}
+
+function log(msg, cls=''){
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-msg ${cls}">${msg}</span>`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog(){ document.getElementById('log').innerHTML=''; }
+
+function buildWorkers(n){
+  pool.workers=[];
+  const ui = document.getElementById('workers-ui');
+  ui.innerHTML='';
+  for(let i=0;i<n;i++){
+    pool.workers.push({id:i, busy:false, taskName:null});
+    const div = document.createElement('div');
+    div.className='worker-item';
+    div.id='wi-'+i;
+    div.innerHTML=`<div class="dot idle" id="dot-${i}"></div><span class="worker-name">Thread-${i}</span><span class="worker-task" id="wt-${i}">idle</span>`;
+    ui.appendChild(div);
+  }
+  document.getElementById('m-workers').textContent=n;
+}
+
+function setWorkerState(id, busy, name){
+  if(!pool.workers[id]) return;
+  pool.workers[id].busy=busy;
+  pool.workers[id].taskName=name;
+  const dot=document.getElementById('dot-'+id);
+  const wt=document.getElementById('wt-'+id);
+  const wi=document.getElementById('wi-'+id);
+  if(dot) dot.className='dot '+(busy?'busy':'idle');
+  if(wt) wt.textContent=busy?name:'idle';
+  if(wi) wi.classList.toggle('busy',busy);
+}
+
+function renderQueue(){
+  const ui=document.getElementById('queue-ui');
+  if(!pool.queue.length){
+    ui.innerHTML='<span class="empty-hint">Queue empty</span>';
+  } else {
+    const sorted=[...pool.queue].sort((a,b)=>({HIGH:2,NORMAL:1,LOW:0}[b.priority])-({HIGH:2,NORMAL:1,LOW:0}[a.priority]));
+    ui.innerHTML='';
+    sorted.forEach(t=>{
+      const c=document.createElement('span');
+      c.className='chip '+t.priority;
+      c.textContent=`${t.name} [${t.priority.charAt(0)}]`;
+      ui.appendChild(c);
+    });
+  }
+  document.getElementById('m-queue').textContent=pool.queue.length;
+}
+
+function updateStats(){
+  const active=pool.workers.filter(w=>w.busy).length;
+  document.getElementById('m-active').textContent=active;
+  document.getElementById('m-done').textContent=pool.done;
+  document.getElementById('s-submitted').textContent=pool.submitted;
+  document.getElementById('s-completed').textContent=pool.done;
+  document.getElementById('s-failed').textContent=pool.failed;
+  document.getElementById('s-wait').textContent=Math.round(pool.waitMs)+' ms';
+  const total=pool.done+pool.queue.length+active;
+  const pct=total>0?Math.round((pool.done/total)*100):0;
+  document.getElementById('progress-fill').style.width=pct+'%';
+  document.getElementById('status-badge').textContent=pool.shutdown?'Shutdown':active>0?'Running':'Ready';
+}
+
+function popQueue(){
+  if(!pool.queue.length) return null;
+  const P={HIGH:2,NORMAL:1,LOW:0};
+  let best=0;
+  for(let i=1;i<pool.queue.length;i++) if(P[pool.queue[i].priority]>P[pool.queue[best].priority]) best=i;
+  return pool.queue.splice(best,1)[0];
+}
+
+function tryDispatch(){
+  if(pool.shutdown) return;
+  for(const w of pool.workers){
+    if(!w.busy && pool.queue.length>0){
+      const task=popQueue();
+      if(!task) break;
+      const waitMs=Date.now()-task.enqueued;
+      pool.waitMs=pool.done>0?(pool.waitMs*pool.done+waitMs)/(pool.done+1):waitMs;
+      setWorkerState(w.id,true,task.name);
+      renderQueue(); updateStats();
+      log(`[Thread-${w.id}] ← ${task.name} [${task.priority}] (waited ${Math.round(waitMs)}ms)`,'info');
+      const dur=rand(...DURATIONS[task.type]);
+      setTimeout(()=>{
+        if(pool.shutdown) return;
+        setWorkerState(w.id,false,null);
+        pool.done++;
+        log(`[Thread-${w.id}] ✓ ${task.name} done in ${dur}ms`,'ok');
+        updateStats(); tryDispatch();
+      }, dur);
+    }
+  }
+}
+
+function submitTasks(){
+  if(pool.shutdown){ log('Pool is shut down — click Reset first','warn'); return; }
+  const type=document.getElementById('task-type').value;
+  const pri=document.getElementById('task-priority').value;
+  const count=parseInt(document.getElementById('task-count').value);
+  for(let i=0;i<count;i++){
+    pool.taskId++; pool.submitted++;
+    pool.queue.push({id:pool.taskId, name:`${LABELS[type]}-${pool.taskId}`, type, priority:pri, enqueued:Date.now()});
+  }
+  log(`Submitted ${count}× ${LABELS[type]} [${pri}]`);
+  renderQueue(); updateStats(); tryDispatch();
+}
+
+function shutdownNow(){
+  pool.shutdown=true;
+  const dropped=pool.queue.length;
+  pool.queue=[];
+  renderQueue(); updateStats();
+  log(`shutdown_now() — dropped ${dropped} pending tasks`,'warn');
+  pool.workers.forEach((_,i)=>setWorkerState(i,false,null));
+  updateStats();
+}
+
+function resetPool(){
+  pool={workers:[], queue:[], done:0, submitted:0, failed:0, taskId:0, shutdown:false, waitMs:0};
+  buildWorkers(parseInt(document.getElementById('worker-count').value));
+  renderQueue(); updateStats();
+  log('Pool reset — ready');
+}
+
+function resizePool(){
+  const n=parseInt(document.getElementById('worker-count').value);
+  pool.workers.forEach((_,i)=>setWorkerState(i,false,null));
+  resetPool();
+  log(`Pool resized to ${n} workers`);
+}
+
+buildWorkers(4);
+log('ThreadPoolLib initialized — 4 worker threads ready','ok');
+</script>
+
+</body>
+</html>
