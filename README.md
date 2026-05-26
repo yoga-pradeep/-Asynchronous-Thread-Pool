@@ -1,205 +1,148 @@
-# ThreadPoolLib
+# Asynchronous Thread Pool Library (C++)
 
-A production-grade **C++ Asynchronous Thread Pool / Task Queue Library** built from scratch using raw OS-level synchronization primitives.
+A lightweight and reusable C++17 thread pool library developed from scratch for executing tasks asynchronously using multiple worker threads. This project demonstrates core multithreading concepts including task scheduling, synchronization, futures, condition variables, and producer-consumer architecture.
 
----
+## Features
+
+- Fixed-size worker thread pool
+- Thread-safe task queue
+- Asynchronous task execution using `std::future`
+- Priority-based task scheduling
+- Graceful and immediate shutdown support
+- Runtime statistics collection
+- Unit and integration testing
+- Interactive HTML-based visualization
+- Modular and reusable library design
 
 ## Project Structure
 
 ```
 ThreadPoolLib/
-├── .vscode/
-│   ├── settings.json          ← IntelliSense + C++17 config
-│   ├── tasks.json             ← Build & Run tasks (Ctrl+Shift+B)
-│   ├── launch.json            ← Debugger config
-│   └── c_cpp_properties.json  ← Include paths
-│
 ├── include/
-│   ├── ThreadPool.h           ← Main library API (header-only templates)
-│   ├── TaskQueue.h            ← Thread-safe blocking queue (standalone)
-│   └── WorkerThread.h         ← Worker thread abstraction
-│
+│   ├── ThreadPool.h
+│   ├── TaskQueue.h
+│   └── WorkerThread.h
 ├── src/
-│   └── ThreadPool.cpp         ← Core implementation (mutex, CV, worker loop)
-│
+│   └── ThreadPool.cpp
 ├── examples/
-│   └── demo.cpp               ← 5 live demos (matrix, blur, priority, etc.)
-│
+│   └── demo.cpp
 ├── tests/
-│   └── test_threadpool.cpp    ← 16 unit + integration tests
-│
-├── Makefile                   ← Build system
+│   └── test_threadpool.cpp
+├── screenshots/
+│   └── project-structure.png
+├── threadpool_ui.html
+├── Makefile
 └── README.md
 ```
 
----
+## Project Screenshot
 
-## Quick Start
+The screenshot below shows the overall project organization and file structure.
 
-### Build & Run (VS Code)
-Press **`Ctrl+Shift+B`** → select **Build & Run Demo**
+![Project Structure](screenshots/project-structure.png)
 
-### Build & Run (Terminal)
+## Technologies Used
+
+- C++17
+- Standard Template Library (STL)
+- Multithreading
+- Mutexes and Condition Variables
+- Futures and Packaged Tasks
+- Atomic Operations
+- Makefile
+- HTML
+
+## Build Instructions
+
+### Run Demo Application
+
 ```bash
-# Run the demo
 make demo
+```
 
-# Run all tests
+### Run Unit Tests
+
+```bash
 make tests
+```
 
-# Build as static library
+### Build Static Library
+
+```bash
 make lib
+```
 
-# Clean
+### Clean Build Files
+
+```bash
 make clean
 ```
 
-### Manual Compile
-```bash
-mkdir build
-g++ -std=c++17 -Wall -O2 -pthread -Iinclude \
-    src/ThreadPool.cpp examples/demo.cpp -o build/demo
-./build/demo
-```
+## Example Usage
 
----
-
-## API Usage
-
-### Basic Submit + Future
 ```cpp
 #include "ThreadPool.h"
+
 using namespace tpl;
 
-ThreadPool pool(4);  // 4 worker threads
+int main() {
+    ThreadPool pool(4);
 
-// Submit a task — returns std::future<int>
-auto future = pool.submit([] {
-    return expensive_computation();
-});
+    auto result = pool.submit([]() {
+        return 10 + 20;
+    });
 
-// Main thread is FREE here — workers are running in background
-do_other_work();
+    std::cout << "Result: " << result.get() << std::endl;
 
-// Block only when you need the result
-int result = future.get();
-```
-
-### With Arguments
-```cpp
-auto fut = pool.submit([](int x, int y) { return x + y; }, 10, 20);
-int result = fut.get();  // 30
-```
-
-### Priority Scheduling
-```cpp
-auto high   = pool.submit(Priority::HIGH,   [] { /* urgent */  });
-auto normal = pool.submit(Priority::NORMAL, [] { /* normal  */  });
-auto low    = pool.submit(Priority::LOW,    [] { /* deferred */ });
-```
-
-### Wait for All Tasks
-```cpp
-pool.submit(task1);
-pool.submit(task2);
-pool.wait_all();  // blocks until queue empty + all workers idle
-```
-
-### Graceful Shutdown
-```cpp
-pool.shutdown();      // finishes all queued tasks, then stops workers
-// OR
-pool.shutdown_now();  // stops immediately, drops pending tasks
-```
-
-### Statistics
-```cpp
-PoolStats s = pool.stats();
-std::cout << "Completed: " << s.total_completed << "\n";
-std::cout << "Avg wait:  " << s.avg_wait_ms << " ms\n";
-```
-
----
-
-## How It Works
-
-### Core Synchronization Pattern
-
-```
-┌──────────────┐   submit()     ┌──────────────────────┐
-│  Main Thread │ ─────────────► │   Priority Queue      │
-│  (Producer)  │                │  (protected by mutex) │
-└──────────────┘                └──────────┬───────────┘
-                                           │ queue_cv_.notify_one()
-                    ┌──────────────────────▼───────────────────────┐
-                    │              Worker Threads (Pool)            │
-                    │                                               │
-                    │  Thread 0: [sleep] → wake → pop → execute   │
-                    │  Thread 1: [sleep] → wake → pop → execute   │
-                    │  Thread N: [sleep] → wake → pop → execute   │
-                    └───────────────────────────────────────────────┘
-```
-
-### Key OS-Level Primitives
-
-| Primitive | Role |
-|-----------|------|
-| `std::mutex` | Protects `task_queue_` from data races |
-| `std::condition_variable queue_cv_` | Workers sleep here; woken when a task is pushed |
-| `std::condition_variable idle_cv_` | `wait_all()` sleeps here; woken when `active_count_` → 0 |
-| `std::atomic<bool> stop_` | Lock-free signal for immediate shutdown |
-| `std::atomic<size_t> active_count_` | Tracks busy workers without holding the lock |
-| `std::packaged_task` | Bridges `submit()` → `std::future` for result retrieval |
-
-### Worker Loop (Simplified)
-```cpp
-void worker_loop() {
-    while (true) {
-        Task task;
-        {
-            std::unique_lock lock(queue_mutex_);
-            queue_cv_.wait(lock, [&]{ return !queue_.empty() || stop_; });
-            if (stop_ && queue_.empty()) return;  // exit
-
-            task = pop_highest_priority_task();
-            active_count_++;
-        }
-        // ← Lock released. Parallelism happens here.
-
-        task.func();   // execute (no lock held)
-        active_count_--;
-        if (active_count_ == 0 && queue_.empty())
-            idle_cv_.notify_all();  // wake wait_all()
-    }
+    return 0;
 }
 ```
 
----
+## How It Works
 
-## Design Decisions
+1. Tasks are submitted to a shared thread-safe queue.
+2. Worker threads wait for available tasks.
+3. When a task is added, an idle worker is notified.
+4. The worker executes the task independently.
+5. Results are returned through `std::future`.
+6. Synchronization is managed using mutexes, condition variables, and atomic variables.
 
-### Why `std::priority_queue` + mutex instead of lock-free?
-Lock-free queues (SPSC ring buffers, Michael-Scott queue) are faster for **high-throughput**, low-contention scenarios. A mutex-based queue is:
-- Correct by construction (no ABA problem)
-- Easier to extend (priority, bounded capacity, statistics)
-- Sufficient for task granularity typical in real applications
+## Key Concepts Implemented
 
-### Why `std::packaged_task` inside `shared_ptr`?
-`std::function<void()>` requires a **copyable** callable. `packaged_task` is move-only. Wrapping in `shared_ptr` makes it copyable (copies the pointer, not the task), enabling storage in `std::function`.
+- Thread Pool Design Pattern
+- Producer-Consumer Architecture
+- Task Scheduling
+- Priority Queues
+- Thread Synchronization
+- Condition Variables
+- Futures and Asynchronous Programming
+- Resource Management (RAII)
+- Concurrent Programming in C++
 
-### Why `notify_one()` not `notify_all()` on submit?
-`notify_all()` wakes every sleeping thread for one task — a **thundering herd**. Only one wins the mutex; the rest sleep again. `notify_one()` is O(1) and correct.
+## Learning Outcomes
 
----
+This project helped me gain practical experience in:
 
-## Requirements
+- Designing reusable system-level C++ libraries
+- Multithreaded programming
+- Thread synchronization techniques
+- Concurrent data structures
+- Asynchronous task execution
+- Performance-oriented software design
+- Unit and integration testing
 
-- **Compiler**: GCC 9+ or Clang 10+ with `-std=c++17`
-- **OS**: Linux (uses pthreads via `-pthread`)
-- **Dependencies**: None (standard library only)
+## Future Improvements
 
----
+- Dynamic thread pool resizing
+- Task cancellation support
+- Work-stealing scheduler
+- Performance benchmarking tools
+- Additional monitoring and logging features
 
-## Resume Keywords Covered
+## Author
 
-`C++17` · `Multithreading` · `std::mutex` · `std::condition_variable` · `std::atomic` · `std::future / std::promise` · `std::packaged_task` · `RAII` · `Memory Management` · `Thread-safe Data Structures` · `Priority Scheduling` · `Linux / pthreads` · `Producer-Consumer Pattern` · `Lock-free Programming` · `Performance Optimization`
+**Yoga Pradeep S**
+
+Computer Science and Engineering Student
+
+GitHub: https://github.com/yoga-pradeep
