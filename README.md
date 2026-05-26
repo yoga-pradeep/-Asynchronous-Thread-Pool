@@ -1,6 +1,6 @@
 # Asynchronous Thread Pool Library (C++)
 
-A lightweight and reusable C++17 thread pool library developed from scratch for executing tasks asynchronously using multiple worker threads. This project demonstrates core multithreading concepts including task scheduling, synchronization, futures, condition variables, and producer-consumer architecture.
+A lightweight and reusable C++17 thread pool library built from scratch for asynchronous task execution and efficient thread management. The project demonstrates core multithreading concepts such as task scheduling, synchronization, futures, condition variables, and the producer-consumer pattern.
 
 ## Features
 
@@ -11,12 +11,12 @@ A lightweight and reusable C++17 thread pool library developed from scratch for 
 - Graceful and immediate shutdown support
 - Runtime statistics collection
 - Unit and integration testing
-- Interactive HTML-based visualization
-- Modular and reusable library design
+- Interactive HTML visualization
+- Modular and reusable design
 
 ## Project Structure
 
-```
+```text
 ThreadPoolLib/
 ├── include/
 │   ├── ThreadPool.h
@@ -29,7 +29,7 @@ ThreadPoolLib/
 ├── tests/
 │   └── test_threadpool.cpp
 ├── screenshots/
-│   └── project-structure.png
+│   └── project_structure.png
 ├── threadpool_ui.html
 ├── Makefile
 └── README.md
@@ -37,9 +37,9 @@ ThreadPoolLib/
 
 ## Project Screenshot
 
-The screenshot below shows the overall project organization and file structure.
+The screenshot below shows the project structure and organization.
 
-![Project Structure](screenshots/project-structure.png)
+![Project Structure](screenshots/project_structure.png)
 
 ## Technologies Used
 
@@ -105,7 +105,7 @@ int main() {
 3. When a task is added, an idle worker is notified.
 4. The worker executes the task independently.
 5. Results are returned through `std::future`.
-6. Synchronization is managed using mutexes, condition variables, and atomic variables.
+6. Synchronization is handled using mutexes, condition variables, and atomic variables.
 
 ## Key Concepts Implemented
 
@@ -121,15 +121,15 @@ int main() {
 
 ## Learning Outcomes
 
-This project helped me gain practical experience in:
+This project provided hands-on experience in:
 
-- Designing reusable system-level C++ libraries
-- Multithreaded programming
-- Thread synchronization techniques
+- Multithreaded programming using modern C++
+- Designing reusable system-level libraries
+- Thread synchronization and communication
 - Concurrent data structures
 - Asynchronous task execution
-- Performance-oriented software design
 - Unit and integration testing
+- Performance-oriented software design
 
 ## Future Improvements
 
@@ -137,12 +137,11 @@ This project helped me gain practical experience in:
 - Task cancellation support
 - Work-stealing scheduler
 - Performance benchmarking tools
-- Additional monitoring and logging features
+- Enhanced monitoring and logging
 
 ## Author
 
-**Yoga Pradeep S**
-
+**Yoga Pradeep S**  
 Computer Science and Engineering Student
 
 GitHub: https://github.com/yoga-pradeep
